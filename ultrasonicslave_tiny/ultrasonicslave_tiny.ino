@@ -1,12 +1,12 @@
 #include <TinyWireS.h>
 
-const int led = 3;
+const int led = 1;
 const int trigger=3;
 const int echo = 4;
 
 uint8_t ID = 2;
 int count = 0;
-unsigned long distance = 42;
+unsigned int distance = 30003;
 
 void blink() {
  digitalWrite(led,HIGH);
@@ -28,25 +28,25 @@ void setup() {
   TinyWireS.onReceive(parseRequest);
 }
 
-void sendLong(unsigned long l) {
+void sendInt(unsigned int l) {
    unsigned char byteArray[3];
  
-    // convert from an unsigned long int to a 4-byte array
-    byteArray[0] = (int)((l >> 24) & 0xFF) ;
-    byteArray[1] = (int)((l >> 16) & 0xFF) ;
-    byteArray[2] = (int)((l >> 8) & 0XFF);
-    byteArray[3] = (int)((l & 0XFF));
+    // convert from an unsigned int to a 2-byte array. Int in Uno is 16 bits
+    //We are big-endian because Jeff wanted to.
+    byteArray[0] = (unsigned int)((l >> 8) & 0xFF) ; //High order bits
+    byteArray[1] = (unsigned int)(l & 0xFF) ; //Low order bits
+//    byteArray[2] = (int)((l >> 8) & 0XFF);
+//    byteArray[3] = (int)((l & 0XFF));
  
- for (int i = 0; i < 4; i++) {
+ for (int i = 0; i < 2; i++) {
    //byte b = byteArray[i];
    TinyWireS.send(byteArray[i]);
  }
 }
 
 void sendUptime() {
- unsigned long uptime = 32765;
- sendLong(uptime);
-
+ unsigned int uptime = 32765;
+ sendInt(uptime);
 }
 
 void getDistance() {
@@ -58,11 +58,16 @@ void getDistance() {
  
  //Read distance
  distance = (pulseIn(echo,HIGH) / 2) / 29.1;
- 
 }
 
 void sendDistance() {
-  sendLong(distance);
+  sendInt(distance);
+}
+
+
+void sendPong() {
+ unsigned int pong = 42424;
+ sendInt(pong); 
 }
 
 
@@ -83,6 +88,11 @@ void parseRequest(uint8_t howMany) {
  
  else if (cmd == 3) {
    sendDistance();
+ }
+ 
+ //Respond to bus scan request
+ else if (cmd == 4) {
+   sendPong();
  }
  
  //Invalid command!
