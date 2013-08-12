@@ -1,7 +1,7 @@
 #include <Wire.h>
 
 const int led = 13;
-uint8_t ID = 2;
+//uint8_t ID = 2;
 
 void blink() {
  digitalWrite(led,HIGH);
