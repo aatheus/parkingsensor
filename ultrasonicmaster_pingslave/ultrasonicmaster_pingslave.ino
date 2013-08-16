@@ -1,15 +1,36 @@
 #include <Wire.h>
+#include <SoftwareSerial.h>
+
+struct Slave {
+ uint8_t id;
+ Slave *next; 
+};
 
 const bool debug = false;
 
 const int led = 13;
+//Slave slaves;
+uint8_t slaves[127];
+uint8_t slaveCount = 0;
+
 uint8_t ID = 2;
+SoftwareSerial xbee(2,4);
 
 void blink() {
  digitalWrite(led,HIGH);
  delay(250);
  digitalWrite(led,LOW);
  delay(250); 
+}
+
+
+
+void transmitSlaveDistance(int ID, int distance) {
+  xbee.print("s");
+  xbee.print(ID);
+  xbee.print("=");
+  xbee.print(distance);
+  xbee.println(";");
 }
 
 unsigned int receiveInt() {
@@ -50,13 +71,27 @@ if(debug) {
  return result; 
 }
 
+//Send command to slave to generate distance internally. Will be read later by master
+void generateSlaveDistance(int ID) {
+  Serial.print("Requesting slave ");
+  Serial.print(ID);
+  Serial.println(" to get distance..");
+
+  Wire.beginTransmission(ID);
+  Wire.write(2);
+  Wire.endTransmission();
+  
+}
+
 void setup() {
   // put your setup code here, to run once:
   pinMode(led,OUTPUT);
   Serial.begin(9600);
+  xbee.begin(9600);
   Serial.println("Up!");
   Wire.begin();
-  delay(1000); //Slave startup time
+  Serial.println("Waiting for slaves to start...");
+  delay(5000); //Slave startup time
   
   //Scan the bus to get all slaves
   scanBus();
@@ -67,14 +102,17 @@ void setup() {
 //the ones that respond in an array. We will truncate it and create a smaller
 //array afterward
 void scanBus() {
-  uint8_t buf[256];
-  uint8_t ptr = -1;
+  //uint8_t buf[127];
+  //int index = -1;
   
   Serial.println("Scanning bus for slaves...");
   
   unsigned long startTime = millis();
   
-  for (int ID=0; ID < 128; ID++) {
+  for (int ID=1; ID <= 16; ID++) {
+   Serial.print("Pinging ");
+   Serial.println(ID);
+   
    Wire.beginTransmission(ID);
    Wire.write(4);
    Wire.endTransmission(); 
@@ -86,8 +124,8 @@ void scanBus() {
    
    
    if(response == 42424) {
-    ptr++;
-    buf[ptr] = ID;  
+    slaveCount++;
+    slaves[slaveCount - 1] = ID;  
     
     /*Serial.print("Slave ");
     Serial.print(ID);
@@ -114,7 +152,7 @@ void scanBus() {
    unsigned long endTime = millis();
    
    String str = "Done! Found ";
-   str.concat((ptr + 1));
+   str.concat((slaveCount));
    str.concat(" slave(s) (took ");
    str.concat(endTime - startTime);
    str.concat(" ms)");
@@ -144,7 +182,7 @@ void getSlaveUptime(int ID) {
   
 }
 
-void getSlaveDistance(int ID) {
+int getSlaveDistance(int ID) {
   Serial.print("Pinging slave ");
   Serial.print(ID);
   Serial.println(" to get distance...");
@@ -154,7 +192,9 @@ void getSlaveDistance(int ID) {
   Wire.write(3);
   Wire.endTransmission();
   
-  //Wait for data from slave
+  Serial.print("Waiting for response from ");
+  Serial.print(ID);
+  Serial.println("...");  //Wait for data from slave
   Wire.requestFrom(ID,2);    // request 8 bytes from slave device
   delay(100);
   unsigned int distance = receiveInt();
@@ -162,6 +202,15 @@ void getSlaveDistance(int ID) {
   Serial.print(ID);
   Serial.print(" distance is ");
   Serial.println(distance); 
+  return distance;
+}
+
+void clearBus() {
+ Wire.requestFrom(0,2);
+
+ while (Wire.available()) {
+   Wire.read(); 
+ }
 }
 
 void loop() {
@@ -172,12 +221,31 @@ void loop() {
  
   //uptimeStr.getBytes(buf, uptimeStr.length() + 1);
   
-  getSlaveUptime(ID);
-  delay(100);
-  getSlaveDistance(ID);
-  delay(100);
+  //getSlaveUptime(ID);
+  //delay(100);
   
-  blink();
-  delay(1000);
+  if (slaveCount < 1) {
+    Serial.println("Nothing to do!\n");
+    delay(5000);
+  }
   
+  else {
+  
+    int distances[slaveCount];
+    
+    for (int i = 0; i < slaveCount; i++) {
+    generateSlaveDistance(slaves[i]);
+    delay(100);
+    }
+    
+    delay(2000);
+ 
+    for (int i = 0; i < slaveCount; i++) {
+     distances[i] = getSlaveDistance(slaves[i]);
+     delay(100);         
+    }
+    
+    blink();
+    delay(1000);
+  }
 }
